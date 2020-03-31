@@ -1,9 +1,34 @@
 defmodule Despegar_app.WSTaxLogger do
 
-    def run(get_url, post_url, file_name) do
-        fetch_clients(get_url, 1)
+    @moduledoc """
+    Toma una url para get, una para post, el nombre de archivo a loguear y
+    el numero de pagina (endpoint).
+    Hace un HTTP request (get) obteniendo un JSON con array de clientes.
+    Por cada cliente calcula impuestos, los informa mediantes HTTP request (post)
+    y loguea en caso satisfactorio.
+    Si surge error obteniendo los clientes, no procesa.
+    Si surge error procesando un cliente, lo saltea.
+    """
+
+    def run(get_url, post_url, file, page, supervisor) do
+
+        fetch_clients(get_url, page)
         |>decode_clients
-        |>make_taxes(post_url, file_name)
+        |>make_taxes(post_url, file, page)
+        |>inform_supervisor(supervisor)
+
+    end
+
+    def inform_supervisor({:ok, processed}, supervisor) do
+        
+        send(supervisor, {:ok, processed})
+
+    end
+
+    def inform_supervisor({:error, reason}, supervisor) do
+        
+        send(supervisor, {:error, 0})
+
     end
 
 
@@ -39,21 +64,20 @@ defmodule Despegar_app.WSTaxLogger do
         end
     end
 
-    def make_taxes({:ok, clients_list}, post_url, file_name) do
-        path = Path.join(System.user_home!, file_name) 
-        {:ok, file} = File.open(path,[:write, :utf8])
+    def make_taxes({:ok, clients_list}, post_url, file, page) do
         
-        clients_list
+        processed = clients_list
         |> Stream.filter(&validate_client/1)
         |> Stream.each(fn c -> report_tax(post_url,c) end)
         |> Stream.each(fn c -> log_tax(file, c) end)
         |> Enum.to_list
+        |> length
 
-        File.close(file)
-        
+        {:ok, processed}
+
     end
 
-    def make_taxes({:error, reason}, _, _) do
+    def make_taxes({:error, reason}, _, _, _) do
         {:error, reason}
     end
 

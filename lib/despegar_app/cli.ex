@@ -9,8 +9,8 @@ defmodule Despegar_app.CLI do
 
     def run(argv) do
         argv 
-            |> parse_args 
-            |> process
+            |> parse_args
+            |> Benchmark.measure(&process/1)
     end
 
 
@@ -41,7 +41,7 @@ defmodule Despegar_app.CLI do
     end
 
     def process({get_url, post_url, file_name}) do
-        Despegar_app.WSTaxLogger.run(get_url, post_url, file_name)
+        WS_Spawner.generate(get_url, post_url, file_name)
     end
 
 
