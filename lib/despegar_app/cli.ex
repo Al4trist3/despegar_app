@@ -1,5 +1,19 @@
 defmodule Despegar_app.CLI do
+    use Application
     @default_file_name "despegarLog.txt"
+
+    def start(_type, _args) do
+        children = [
+        # Starts a worker by calling: Stack.Worker.start_link(arg)
+        # {Stack.Worker, arg}
+        {Despegar_app.WS_Spawner, []}
+        ]
+
+        # See https://hexdocs.pm/elixir/Supervisor.html
+        # for other strategies and supported options
+        opts = [strategy: :one_for_one, name: __MODULE__]
+        Supervisor.start_link(children, opts)
+    end
 
     @moduledoc """
     Maneja los argumentos de la linea de comandos
@@ -41,7 +55,7 @@ defmodule Despegar_app.CLI do
     end
 
     def process({get_url, post_url, file_name}) do
-        WS_Spawner.generate(get_url, post_url, file_name)
+        Despegar_app.WS_Spawner.generate(get_url, post_url, file_name)
     end
 
 

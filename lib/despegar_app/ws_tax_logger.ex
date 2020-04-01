@@ -17,22 +17,8 @@ defmodule Despegar_app.WSTaxLogger do
         fetch_clients(ws)
         |>decode_clients
         |>make_taxes(ws)
-        |>inform_supervisor(ws)
 
     end
-
-    def inform_supervisor({:ok, processed}, supervisor) do
-        
-        send(supervisor, {:ok, processed})
-
-    end
-
-    def inform_supervisor({:error, _reason}, supervisor) do
-        
-        send(supervisor, {:error, 0})
-
-    end
-
 
     def fetch_clients(ws = %Despegar_app.WSTaxLogger{}) do
         p = to_string(ws.page)

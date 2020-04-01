@@ -1,38 +1,38 @@
-defmodule WS_Spawner do
-
+defmodule Despegar_app.WS_Spawner do
+    use Supervisor
     @max_pages 1000
+    @max_concurrency 10
+
+    
+    def start_link(args) do
+        Supervisor.start_link(__MODULE__, args, name: __MODULE__)
+    end
+
+    def init(get_url, post_url, file_name) do
+        children = [
+            {Task.Supervisor, name: Despegar_app.TaskSupervisor, restart: :temporary}
+        ]
+        Supervisor.init(children, strategy: :one_for_one)
+    end
+
     
     def generate(get_url, post_url, file_name) do
 
         path = Path.join(System.user_home!, file_name)
         {:ok, file} = File.open(path,[:write, :utf8])
 
-        supervisor = spawn(WS_Spawner, :supervise, [0, 0, self()])
+        tasks = for page <- 1..@max_pages do
+            %Despegar_app.WSTaxLogger{get_url: get_url, post_url: post_url, file_name: file_name, page: page}
+        end
         
-        for page <- 1..@max_pages do
-            spawn(Despegar_app.WSTaxLogger, :run, [get_url, post_url, file, page, supervisor])
-        end
+        processed = Task.Supervisor.async_stream(Despegar_app.TaskSupervisor, tasks, Despegar_app.WSTaxLogger, :run, [],  max_concurrency: @max_concurrency)
+        |> Enum.filter(fn {c, _} -> c: == ok end)
+        |> Enum.reduce(fn {_, r}, {_, r2} -> r + r2 end)
 
-        receive do
-            {:ok, processed} ->
-                File.close(file)
-                IO.puts("Se procesaron #{processed} clientes")
-        end
+        File.close(file)
+        IO.puts("Se procesaron #{processed} clientes")
+
 
     end
 
-    def supervise(count, total_processed, pid) when count == @max_pages do
-        
-        send(pid, {:ok, total_processed})
-
-    end
-
-    def supervise(count, total_processed, pid) do
-
-        receive do
-            {_, processed} -> supervise(count + 1, total_processed + processed , pid)
-        end
-        
-    end
-    
 end
