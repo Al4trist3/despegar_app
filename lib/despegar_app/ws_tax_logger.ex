@@ -10,12 +10,14 @@ defmodule Despegar_app.WSTaxLogger do
     Si surge error procesando un cliente, lo saltea.
     """
 
-    def run(get_url, post_url, file, page, supervisor) do
+    defstruct get_url: "", post_url: "", file: "", page: 1, supervisor: WS_Spawner
 
-        fetch_clients(get_url, page)
+    def run(ws = %Despegar_app.WSTaxLogger{}) do
+
+        fetch_clients(ws)
         |>decode_clients
-        |>make_taxes(post_url, file, page)
-        |>inform_supervisor(supervisor)
+        |>make_taxes(ws)
+        |>inform_supervisor(ws)
 
     end
 
@@ -25,15 +27,16 @@ defmodule Despegar_app.WSTaxLogger do
 
     end
 
-    def inform_supervisor({:error, reason}, supervisor) do
+    def inform_supervisor({:error, _reason}, supervisor) do
         
         send(supervisor, {:error, 0})
 
     end
 
 
-    def fetch_clients(get_url, page) do
-        HTTPoison.get(get_url, [], params: %{page: "1"})
+    def fetch_clients(ws = %Despegar_app.WSTaxLogger{}) do
+        p = to_string(ws.page)
+        HTTPoison.get(ws.get_url, [], params: %{page: p})
         |> handle_response
     end
     
@@ -64,12 +67,14 @@ defmodule Despegar_app.WSTaxLogger do
         end
     end
 
-    def make_taxes({:ok, clients_list}, post_url, file, page) do
+    def make_taxes({:ok, clients_list}, ws = %Despegar_app.WSTaxLogger{}) do
         
         processed = clients_list
-        |> Stream.filter(&validate_client/1)
-        |> Stream.each(fn c -> report_tax(post_url,c) end)
-        |> Stream.each(fn c -> log_tax(file, c) end)
+        |> Stream.map(&Despegar_app.Client.from_json/1)
+        |> Stream.filter(fn {a,_} -> a == :error end )
+        |> Stream.map(fn {_a, c} -> report_tax(ws, c) end)
+        |> Stream.filter(fn {a,_} -> a == :error end )
+        |> Stream.each(fn c -> log_tax(ws, c) end)
         |> Enum.to_list
         |> length
 
@@ -81,88 +86,16 @@ defmodule Despegar_app.WSTaxLogger do
         {:error, reason}
     end
 
-    def validate_client(client) do
-        case Map.get(client, "type") do
-            "HUMAN" -> validate_client_person(client)
-            "ENTERPRISE" -> validate_client_legal_entity(client)
-            nil -> false
-        end
-    end
-
-    def validate_client_person(client) do
-        fields = ["name", "document", "type", "amount", "date", "tax"]
-        Enum.sort(fields) == Enum.sort(Map.keys(client))
-    end
-
-    def validate_client_legal_entity(client) do
-        fields = ["name", "document", "type", "amount", "date", "tax", "extraCharge", "legalAdvisor", "extraTax"]
-        Enum.sort(fields) == Enum.sort(Map.keys(client))
-    end
-
-    def calc_amount(client) do
-        case Map.get(client, "type") do
-            "HUMAN" -> Map.get(client, "amount") |> String.to_integer
-            "ENTERPRISE" -> calc_amount_for_legal_entity(client)
-        end
-    end
-
-    def calc_amount_for_legal_entity(client) do
-        amount = Map.get(client, "amount") |> String.to_integer
-        extra_charge = Map.get(client, "extraCharge") |> String.to_integer
-        amount + extra_charge
-    end
-
-    def calc_tax(client) do
-        case Map.get(client, "type") do
-            "HUMAN" -> calc_tax_for_person(client)
-            "ENTERPRISE" -> calc_amount_for_legal_entity(client)
-        end
-    end
-
-    def calc_tax_for_person(client) do
-        amount = calc_amount(client)
-        tax = Map.get(client, "tax") |> String.to_float
-        amount * tax
-    end
-
-
-    def calc_tax_for_legal_entity(client) do
-        amount = Map.get(client, "amount") |> String.to_integer
-        extra_charge = Map.get(client, "extraCharge") |> String.to_integer
-        tax = Map.get(client, "tax") |> String.to_integer
-        extra_tax = tax = Map.get(client, "extraTax") |> String.to_float
-        amount * tax + extra_charge * extra_tax
-    end
-
-    def complete_name(client) do
-        case Map.get(client, "type") do
-            "HUMAN" -> Map.get(client, "name")
-            "ENTERPRISE" -> Map.get(client, "name") <> "," <> Map.get(client, "legalAdvisor")
-        end
-    end
-
-
-    def report_tax(post_url, client) do
+    def report_tax(ws = %Despegar_app.WSTaxLogger{}, c = %Despegar_app.Client{}) do
         headers = [{"Content-type", "application/json"}]
-        body = body_for_post(client)
-        HTTPoison.post(post_url, body, headers, [])
+        body = Despegar_app.Client.body_for_post(c)
+        {r, _b} = HTTPoison.post(ws.post_url, body, headers, []) |> handle_response
+        {r, c}
     end
 
-    def body_for_post(client) do
-        Jason.encode!(%{
-            "amount" => calc_amount(client),
-            "total tax" => calc_tax(client),
-            "name"=> complete_name(client),
-            "document"=> Map.get(client, "document")
-            })
-    end
 
-    def log_tax(file, client) do
-        name = complete_name(client)
-        amount = calc_amount(client) |> to_string
-        tax = calc_tax(client) |> to_string
-        log_tex = name <> "," <> amount <> "," <> tax <> "\n"
-        IO.write(file, log_tex)
+    def log_tax(ws = %Despegar_app.WSTaxLogger{}, c = %Despegar_app.Client{}) do
+        IO.write(ws.file, Despegar_app.Client.log_tex(c))
     end
 
 
