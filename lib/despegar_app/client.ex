@@ -24,7 +24,7 @@ defmodule Despegar_app.Client do
     end
 
     def calc_tax(client = %Despegar_app.Client{type: "ENTERPRISE"}) do
-        client.amount * client.tax + client.extra_charge * client.extra_tax
+        client.amount * client.tax + client.extraCharge * client.extraTax
     end
 
     def body_for_post(client = %Despegar_app.Client{}) do

@@ -17,6 +17,7 @@ defmodule Despegar_app.WSTaxLogger do
         fetch_clients(ws)
         |>decode_clients
         |>make_taxes(ws)
+        |> length
 
     end
 
@@ -55,16 +56,13 @@ defmodule Despegar_app.WSTaxLogger do
 
     def make_taxes({:ok, clients_list}, ws = %Despegar_app.WSTaxLogger{}) do
         
-        processed = clients_list
+        clients_list
         |> Stream.map(&Despegar_app.Client.from_json/1)
-        |> Stream.filter(fn {a,_} -> a == :error end )
+        |> Stream.filter(fn {a,_} -> a == :ok end )
         |> Stream.map(fn {_a, c} -> report_tax(ws, c) end)
-        |> Stream.filter(fn {a,_} -> a == :error end )
-        |> Stream.each(fn c -> log_tax(ws, c) end)
+        |> Stream.filter(fn {a,_} -> a == :ok end )
+        |> Stream.each(fn {_r, c} -> log_tax(ws, c) end)
         |> Enum.to_list
-        |> length
-
-        {:ok, processed}
 
     end
 

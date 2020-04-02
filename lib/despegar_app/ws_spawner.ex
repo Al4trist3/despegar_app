@@ -8,7 +8,7 @@ defmodule Despegar_app.WS_Spawner do
         Supervisor.start_link(__MODULE__, args, name: __MODULE__)
     end
 
-    def init(get_url, post_url, file_name) do
+    def init(_init_arg) do
         children = [
             {Task.Supervisor, name: Despegar_app.TaskSupervisor, restart: :temporary}
         ]
@@ -22,12 +22,12 @@ defmodule Despegar_app.WS_Spawner do
         {:ok, file} = File.open(path,[:write, :utf8])
 
         tasks = for page <- 1..@max_pages do
-            %Despegar_app.WSTaxLogger{get_url: get_url, post_url: post_url, file_name: file_name, page: page}
+            %Despegar_app.WSTaxLogger{get_url: get_url, post_url: post_url, file: file, page: page}
         end
         
         processed = Task.Supervisor.async_stream(Despegar_app.TaskSupervisor, tasks, Despegar_app.WSTaxLogger, :run, [],  max_concurrency: @max_concurrency)
-        |> Enum.filter(fn {c, _} -> c: == ok end)
-        |> Enum.reduce(fn {_, r}, {_, r2} -> r + r2 end)
+        |> Enum.filter(fn {c, _} -> c == :ok end)
+        |> Enum.reduce(0, fn {_, r}, acc -> r + acc end)
 
         File.close(file)
         IO.puts("Se procesaron #{processed} clientes")
