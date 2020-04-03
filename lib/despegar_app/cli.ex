@@ -22,6 +22,8 @@ defmodule Despegar_app.CLI do
     """
 
     def run(argv) do
+        start([],[])
+        
         argv 
             |> parse_args
             |> Benchmark.measure(&process/1)

@@ -43,54 +43,81 @@ defmodule Despegar_app.Client do
         name <> "," <> amount <> "," <> tax <> "\n"
     end
 
+    def extract_type(%{"type" => type}), do: {:ok, type}
+    def extract_type(_), do: {:error, :type_missing}
+
+    def extract_name(%{"name" => name}), do: {:ok, name}
+    def extract_name(_), do: {:error, :name_missing}
+
+    def extract_document(%{"document" => document}), do: {:ok, String.to_integer(document)}
+    def extract_document(_), do: {:error, :document_missing}
+    
+    def extract_amount(%{"amount" => amount}), do: {:ok, String.to_integer(amount)}
+    def extract_amount(_), do: {:error, :amount_missing}
+
+    def extract_date(%{"date" => date}), do: {:ok, Date.from_iso8601!(date)}
+    def extract_date(_), do: {:error, :date_missing}
+
+    def extract_tax(%{"tax" => tax}), do: {:ok, String.to_float(tax)}
+    def extract_tax(_), do: {:error, :tax_missing}
+
+    def extract_extra_charge(%{"extraCharge" => extra_charge}), do: {:ok, String.to_integer(extra_charge)}
+    def extract_extra_charge(_), do: {:error, :extra_charge_missing}
+
+    def extract_legal_advisor(%{"legalAdvisor" => legal_advisor}), do: {:ok, legal_advisor}
+    def extract_legal_advisor(_), do: {:error, :legal_advisor_missing}
+
+    def extract_extra_tax(%{"extraTax" => extra_tax}), do: {:ok, String.to_float(extra_tax)}
+    def extract_extra_tax(_), do: {:error, :extra_tax_missing}
+
     def from_json(json) do
-        case Map.get(json, "type") do
-            nil -> {:error, :no_type_field}
-            "HUMAN" -> from_json_person(json)
-            "ENTERPRISE" -> from_json_legal_entity(json)
+        case extract_type(json) do
+            {:error, reason} -> {:error, reason}
+            {:ok, "HUMAN"} -> from_json_person(json)
+            {:ok, "ENTERPRISE"} -> from_json_legal_entity(json)
         end
     end
 
     def from_json_person(json) do
-        error = ["name", "document", "amount", "date", "tax"]
-        |> Enum.any?(fn e -> json |> Map.get(e) |> is_nil end)
-
-        case error do
-            true -> {:error, :field_error}
-            false ->
+        with {:ok, name} <- extract_name(json),
+            {:ok, document} <- extract_document(json),
+            {:ok, amount} <- extract_amount(json),
+            {:ok, date} <- extract_date(json),
+            {:ok, tax} <- extract_tax(json) do
                 {:ok, %Despegar_app.Client{
-                    name: Map.get(json, "name"),
-                    document: Map.get(json, "document"),
-                    amount: String.to_integer(Map.get(json, "amount")),
-                    date: Date.from_iso8601!(Map.get(json, "date")),
-                    tax: String.to_float(Map.get(json, "tax")),
-                    type: Map.get(json, "type")
+                    name: name,
+                    document: document,
+                    amount: amount,
+                    date: date,
+                    tax: tax,
+                    type: "HUMAN"
                     }
                 }
-        end
+            end
     end
 
     def from_json_legal_entity(json) do
-        error = ["name", "document", "amount", "date", "tax", "extraCharge", "legalAdvisor", "extraTax"]
-        |> Enum.any?(fn e -> json |> Map.get(e) |> is_nil end)
-
-        case error do
-            true -> {:error, :field_error}
-            false -> 
+        with {:ok, name} <- extract_name(json),
+            {:ok, document} <- extract_document(json),
+            {:ok, amount} <- extract_amount(json),
+            {:ok, date} <- extract_date(json),
+            {:ok, tax} <- extract_tax(json),
+            {:ok, extra_charge} <- extract_extra_charge(json),
+            {:ok, extra_tax} <- extract_extra_tax(json),
+            {:ok, legal_advisor} <- extract_legal_advisor(json) do
                 {:ok, %Despegar_app.Client{
-                    name: Map.get(json, "name"),
-                    document: Map.get(json, "document"),
-                    amount: String.to_integer(Map.get(json, "amount")),
-                    date: Date.from_iso8601!(Map.get(json, "date")),
-                    tax: String.to_float(Map.get(json, "tax")),
-                    type: Map.get(json, "type"),
-                    extraTax: String.to_float(Map.get(json, "extraTax")),
-                    extraCharge: String.to_integer(Map.get(json, "extraCharge")),
-                    legalAdvisor: Map.get(json, "legalAdvisor")
+                    name: name,
+                    document: document,
+                    amount: amount,
+                    date: date,
+                    tax: tax,
+                    type: "ENTERPRISE",
+                    extraTax: extra_tax,
+                    extraCharge: extra_charge,
+                    legalAdvisor: legal_advisor
                     }
                 }
-        end
+            end
     end
-
           
 end
